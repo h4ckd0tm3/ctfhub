@@ -8,11 +8,16 @@ import requests
 import smtplib
 import exrex
 
+from django.core.files.storage import get_storage_class
+from django.conf import settings
+
 from functools import lru_cache
 from uuid import uuid4
 
 from ctftools.settings import (
-    CTFPAD_HOSTNAME, CTFPAD_PORT, CTFPAD_USE_SSL,
+    CTFPAD_HOSTNAME,
+    CTFPAD_PORT,
+    CTFPAD_USE_SSL,
     CTFPAD_ACCEPTED_IMAGE_EXTENSIONS,
     CTFPAD_DEFAULT_CTF_LOGO,
     HEDGEDOC_URL,
@@ -20,7 +25,9 @@ from ctftools.settings import (
     STATIC_URL,
     CTFTIME_API_EVENTS_URL,
     CTFTIME_USER_AGENT,
-    EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD,
+    EMAIL_HOST,
+    EMAIL_HOST_USER,
+    EMAIL_HOST_PASSWORD,
     DISCORD_WEBHOOK_URL,
     EXCALIDRAW_ROOM_ID_PATTERN,
     EXCALIDRAW_ROOM_KEY_PATTERN,
@@ -46,8 +53,8 @@ def which_hedgedoc() -> str:
     try:
         requests.get(HEDGEDOC_URL)
     except:
-        if USE_INTERNAL_HEDGEDOC or HEDGEDOC_URL == 'http://localhost:3000':
-            return 'http://hedgedoc:3000'
+        if USE_INTERNAL_HEDGEDOC or HEDGEDOC_URL == "http://localhost:3000":
+            return "http://hedgedoc:3000"
     return HEDGEDOC_URL
 
 
@@ -63,9 +70,9 @@ def register_new_hedgedoc_user(username: str, password: str) -> bool:
         bool: if the register action succeeded, returns True; False in any other cases
     """
     res = requests.post(
-        which_hedgedoc() + '/register',
-        data={'email': username, 'password': password},
-        allow_redirects=False
+        which_hedgedoc() + "/register",
+        data={"email": username, "password": password},
+        allow_redirects=False,
     )
 
     if res.status_code != requests.codes.found:
@@ -75,7 +82,7 @@ def register_new_hedgedoc_user(username: str, password: str) -> bool:
 
 
 def create_new_note() -> str:
-    """"Returns a unique note ID so that the note will be automatically created when accessed for the first time
+    """ "Returns a unique note ID so that the note will be automatically created when accessed for the first time
 
     Returns:
         str: the string ID of the new note
@@ -84,7 +91,7 @@ def create_new_note() -> str:
 
 
 def check_note_id(id: str) -> bool:
-    """"Checks if a specific note exists from its ID.
+    """ "Checks if a specific note exists from its ID.
 
     Args:
         id (str): the identifier to check
@@ -96,30 +103,38 @@ def check_note_id(id: str) -> bool:
     return res.status_code == requests.codes.found
 
 
-def get_file_magic(fpath: pathlib.Path) -> str:
-    """Returns the file description from its magic number (ex. 'PE32+ executable (console) x86-64, for MS Windows' )
+def get_file_magic(file) -> str:
+    """
+    Returns the file description from its magic number (ex. 'PE32+ executable (console) x86-64, for MS Windows' )
 
     Args:
-        fpath (pathlib.Path): path object to the file
+        file: File-like object
 
     Returns:
         str: the file description, or "" if the file doesn't exist on FS
     """
-    abspath = str(fpath.absolute())
-    return magic.from_file(abspath) if fpath.exists() else "Data"
+    try:
+        file.seek(0)  # Ensure file is read from beginning
+        return magic.from_buffer(file.read())
+    except Exception as e:
+        return "Data"
 
 
-def get_file_mime(fpath: pathlib.Path) -> str:
-    """Returns the mime type associated to the file (ex. 'appication/pdf')
+def get_file_mime(file) -> str:
+    """
+    Returns the mime type associated to the file (ex. 'appication/pdf')
 
     Args:
-        fpath (pathlib.Path): path object to the file
+        file: File-like object
 
     Returns:
         str: the file mime type, or "application/octet-stream" if the file doesn't exist on FS
     """
-    abspath = str(fpath.absolute())
-    return magic.from_file(abspath, mime=True) if fpath.exists() else "application/octet-stream"
+    try:
+        file.seek(0)  # Ensure file is read from beginning
+        return magic.from_buffer(file.read(), mime=True)
+    except Exception as e:
+        return "application/octet-stream"
 
 
 def ctftime_parse_date(date: str) -> datetime:
@@ -144,8 +159,8 @@ def ctftime_ctfs(running=True, future=True) -> list:
 
     result = []
     for ctf in ctfs:
-        start = ctf['start']
-        finish = ctf['finish']
+        start = ctf["start"]
+        finish = ctf["finish"]
 
         if running and start < now < finish:
             result.append(ctf)
@@ -164,10 +179,12 @@ def ctftime_fetch_ctfs(limit=100) -> list:
     """
     res = requests.get(
         f"{CTFTIME_API_EVENTS_URL}?limit={limit}&start={time() - (3600 * 24 * 60):.0f}&finish={time() + (3600 * 24 * 7 * 26):.0f}",
-        headers={"user-agent": CTFTIME_USER_AGENT})
+        headers={"user-agent": CTFTIME_USER_AGENT},
+    )
     if res.status_code != requests.codes.ok:
         raise RuntimeError(
-            f"CTFTime service returned HTTP code {res.status_code} (expected {requests.codes.ok}): {res.reason}")
+            f"CTFTime service returned HTTP code {res.status_code} (expected {requests.codes.ok}): {res.reason}"
+        )
 
     result = []
     for ctf in res.json():
@@ -193,7 +210,8 @@ def ctftime_get_ctf_info(ctftime_id: int) -> dict:
     res = requests.get(url, headers={"user-agent": CTFTIME_USER_AGENT})
     if res.status_code != requests.codes.ok:
         raise RuntimeError(
-            f"CTFTime service returned HTTP code {res.status_code} (expected {requests.codes.ok}): {res.reason}")
+            f"CTFTime service returned HTTP code {res.status_code} (expected {requests.codes.ok}): {res.reason}"
+        )
     result = res.json()
     return result
 
@@ -233,13 +251,7 @@ def send_mail(recipients: list, subject: str, body: str) -> bool:
     """
     if EMAIL_HOST and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
         try:
-            send_mail(
-                subject,
-                body,
-                EMAIL_HOST_USER,
-                recipients,
-                fail_silently=False
-            )
+            send_mail(subject, body, EMAIL_HOST_USER, recipients, fail_silently=False)
             return True
         except smtplib.SMTPException:
             pass
@@ -317,8 +329,13 @@ def export_challenge_note(member, note_id: uuid4) -> str:
     """
     result = ""
     with requests.Session() as session:
-        h = session.post(f"{HEDGEDOC_URL}/login",
-                         data={"email": member.hedgedoc_username, "password": member.hedgedoc_password})
+        h = session.post(
+            f"{HEDGEDOC_URL}/login",
+            data={
+                "email": member.hedgedoc_username,
+                "password": member.hedgedoc_password,
+            },
+        )
         if h.status_code == requests.codes.ok:
             h2 = session.get(f"{HEDGEDOC_URL}{note_id}/download")
             if h2.status_code == requests.codes.ok:
@@ -333,3 +350,13 @@ def generate_excalidraw_room_id() -> str:
 
 def generate_excalidraw_room_key() -> str:
     return exrex.getone(EXCALIDRAW_ROOM_KEY_PATTERN)
+
+
+def get_named_storage(name):
+    config = settings.STORAGES[name]
+    storage_class = get_storage_class(config["BACKEND"])
+    return storage_class(**config["OPTIONS"])
+
+
+def get_challenge_upload_path(instance, filename):
+    return f"files/{instance.challenge.id}/{filename}"

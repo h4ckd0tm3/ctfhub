@@ -1,11 +1,20 @@
 import json
 
 from django.http.request import HttpRequest
-from django.http.response import HttpResponse
+from django.http.response import HttpResponse, JsonResponse
+from django.views import View
+
 from ctfpad.decorators import only_if_authenticated_user
 from django.contrib import messages
 from django.shortcuts import render, get_object_or_404, redirect
-from django.views.generic import ListView, DetailView, UpdateView, DeleteView, CreateView, FormView
+from django.views.generic import (
+    ListView,
+    DetailView,
+    UpdateView,
+    DeleteView,
+    CreateView,
+    FormView,
+)
 from django.urls import reverse, reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
@@ -58,16 +67,21 @@ class ChallengeCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
         except Ctf.DoesNotExist:
             pass
         form = self.form_class(initial=self.initial)
-        return render(request, self.template_name, {'form': form})
+        return render(request, self.template_name, {"form": form})
 
     def form_valid(self, form):
-        if Challenge.objects.filter(name=form.instance.name, ctf=form.instance.ctf).count() > 0:
+        if (
+            Challenge.objects.filter(
+                name=form.instance.name, ctf=form.instance.ctf
+            ).count()
+            > 0
+        ):
             form.errors["name"] = "ChallengeNameAlreadyExistError"
-            return render(self.request, self.template_name, {'form': form})
+            return render(self.request, self.template_name, {"form": form})
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse("ctfpad:challenges-detail", kwargs={'pk': self.object.pk})
+        return reverse("ctfpad:challenges-detail", kwargs={"pk": self.object.pk})
 
 
 class ChallengeImportView(LoginRequiredMixin, FormView):
@@ -81,22 +95,24 @@ class ChallengeImportView(LoginRequiredMixin, FormView):
     def get(self, request, *args, **kwargs):
         self.initial["ctf"] = self.kwargs.get("ctf")
         form = self.form_class(initial=self.initial)
-        return render(request, self.template_name, {'form': form})
+        return render(request, self.template_name, {"form": form})
 
     def form_valid(self, form):
         ctf_id = self.kwargs.get("ctf")
         ctf = Ctf.objects.get(pk=ctf_id)
-        data = form.cleaned_data['data']
+        data = form.cleaned_data["data"]
 
         try:
             for challenge in data:
-                category, created = ChallengeCategory.objects.get_or_create(name=challenge["category"].strip().lower())
+                category, created = ChallengeCategory.objects.get_or_create(
+                    name=challenge["category"].strip().lower()
+                )
                 points = 0
                 description = ""
 
-                if form.cleaned_data['format'] == 'CTFd':
+                if form.cleaned_data["format"] == "CTFd":
                     points = challenge.get("value")
-                elif form.cleaned_data['format'] == 'rCTF':
+                elif form.cleaned_data["format"] == "rCTF":
                     points = challenge.get("points")
                     description = challenge.get("description")
 
@@ -121,7 +137,7 @@ class ChallengeImportView(LoginRequiredMixin, FormView):
             return self.form_invalid(form)
 
     def get_success_url(self):
-        return reverse("ctfpad:ctfs-detail", kwargs={'pk': self.initial["ctf"]})
+        return reverse("ctfpad:ctfs-detail", kwargs={"pk": self.initial["ctf"]})
 
 
 class ChallengeDetailView(LoginRequiredMixin, DetailView):
@@ -137,6 +153,7 @@ class ChallengeDetailView(LoginRequiredMixin, DetailView):
             "file_upload_form": ChallengeFileCreateForm(),
             "hedgedoc_url": HEDGEDOC_URL,
             "excalidraw_url": self.object.get_excalidraw_url(self.request.user.member),
+            "show_footer": False,
         }
         return ctx
 
@@ -150,15 +167,14 @@ class ChallengeUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     success_message = "Challenge successfully updated"
 
     def get_success_url(self):
-        return reverse("ctfpad:challenges-detail", kwargs={'pk': self.object.pk})
+        return reverse("ctfpad:challenges-detail", kwargs={"pk": self.object.pk})
 
     def form_valid(self, form):
         if "solvers" in form.cleaned_data:
-
-            if (len(form.cleaned_data["solvers"]) > 0 and not form.cleaned_data["flag"]) or \
-                    (len(form.cleaned_data["solvers"]) == 0 and form.cleaned_data["flag"]):
-                messages.error(
-                    self.request, "Cannot set flag without solver(s)")
+            if (
+                len(form.cleaned_data["solvers"]) > 0 and not form.cleaned_data["flag"]
+            ) or (len(form.cleaned_data["solvers"]) == 0 and form.cleaned_data["flag"]):
+                messages.error(self.request, "Cannot set flag without solver(s)")
                 return redirect("ctfpad:challenges-detail", self.object.id)
 
         return super().form_valid(form)
@@ -169,7 +185,7 @@ class ChallengeSetFlagView(ChallengeUpdateView):
     template_name = "ctfpad/challenges/detail.html"
 
     def get_success_url(self):
-        return reverse("ctfpad:challenges-detail", kwargs={'pk': self.object.pk})
+        return reverse("ctfpad:challenges-detail", kwargs={"pk": self.object.pk})
 
     def form_valid(self, form):
         if form.instance.ctf.is_finished:
@@ -179,7 +195,9 @@ class ChallengeSetFlagView(ChallengeUpdateView):
         if form.instance.ctf.flag_prefix and "flag" in form.cleaned_data:
             if not form.cleaned_data["flag"].startswith(form.instance.ctf.flag_prefix):
                 messages.warning(
-                    self.request, f"Unexpected flag format: missing pattern '{form.instance.ctf.flag_prefix}'")
+                    self.request,
+                    f"Unexpected flag format: missing pattern '{form.instance.ctf.flag_prefix}'",
+                )
 
         return super().form_valid(form)
 
@@ -192,7 +210,7 @@ class ChallengeDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
     success_message = "Challenge deleted successfully"
 
     def get_success_url(self):
-        return reverse("ctfpad:ctfs-detail", kwargs={'pk': self.object.ctf.id})
+        return reverse("ctfpad:ctfs-detail", kwargs={"pk": self.object.ctf.id})
 
 
 class ChallengeExportAsGithubPageView(LoginRequiredMixin, DetailView):
@@ -209,11 +227,25 @@ class ChallengeExportAsGithubPageView(LoginRequiredMixin, DetailView):
             tags += t.name + ","
         tags += "]"
         content = generate_github_page_header(
-            title=c.name, author=u.username, tags=tags)
+            title=c.name, author=u.username, tags=tags
+        )
         if c.description:
             content += f"Description:\n> {c.description}\n\n"
         content += export_challenge_note(u, c.note_id)
-        response = HttpResponse(
-            content, content_type="text/markdown; charset=utf-8")
+        response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
         response["Content-Length"] = len(content)
         return response
+
+
+class ChallengeWorkOn(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        challenge_id = self.kwargs.get("pk")
+        challenge = Challenge.objects.get(id=challenge_id)
+
+        # Add the current user to the challenge's working_on_it field
+        if challenge.working_on_it.contains(request.user.member):
+            challenge.working_on_it.remove(request.user.member)
+        else:
+            challenge.working_on_it.add(request.user.member)
+
+        return redirect(reverse("ctfpad:ctfs-detail", kwargs={"pk": challenge.ctf.id}))

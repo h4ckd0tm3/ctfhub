@@ -1,6 +1,6 @@
 <div class="modal fade" id="QuickAddCategoryModal" tabindex="-1" aria-labelledby="QuickAddCategoryModalLabel" aria-hidden="true">
-	<div class="modal-dialog">
-	    <div class="modal-content">
+    <div class="modal-dialog">
+        <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="QuickAddCategoryModalLabel">Quick Add Category</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
@@ -8,7 +8,7 @@
                 </button>
             </div>
             <form method="POST" action="{% url 'ctfpad:categories-create' %}">
-            {% csrf_token %}
+                {% csrf_token %}
                 <div class="modal-body">
                     <div class="form-group">
                         <div class="input-group mb-3">
@@ -22,6 +22,6 @@
                     </div>
                 </div>
             </form>
-	    </div>
-	</div>
+        </div>
+    </div>
 </div>
